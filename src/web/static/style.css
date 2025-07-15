@@ -1,0 +1,18 @@
+/* Custom styles for CS2 Arbitrage Tool */
+
+/* Additional custom styles can be added here */
+.custom-loading {
+    text-align: center;
+    padding: 20px;
+    color: #e94560;
+}
+
+.custom-error {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.custom-success {
+    color: #28a745;
+    font-weight: bold;
+} 

@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - CS2 Arbitrage Tool (Simple){% endblock %}
+
+{% block content %}
+<div class="row fade-in">
+    <!-- Statistics Cards -->
+    <div class="col-md-4 mb-4">
+        <div class="card stats-card">
+            <div class="stats-number" id="total-marketplaces">-</div>
+            <div class="stats-label">Total Marketplaces</div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card stats-card">
+            <div class="stats-number" id="available-marketplaces">-</div>
+            <div class="stats-label">Available Marketplaces</div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card stats-card">
+            <div class="stats-number" id="last-updated">-</div>
+            <div class="stats-label">Last Updated</div>
+        </div>
+    </div>
+</div>
+
+<div class="row slide-in">
+    <!-- Marketplace Status -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-server me-2"></i>
+                    Marketplace Status
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="marketplace-status">
+                    <div class="loading">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading marketplace status...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Search -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-search me-2"></i>
+                    Quick Search
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="quick-search-form">
+                    <div class="mb-3">
+                        <label for="skin-name" class="form-label">Skin Name</label>
+                        <input type="text" class="form-control" id="skin-name" placeholder="e.g., Dragon Lore, Fade">
+                    </div>
+                    <div class="mb-3">
+                        <label for="weapon-name" class="form-label">Weapon (Optional)</label>
+                        <input type="text" class="form-control" id="weapon-name" placeholder="e.g., AK-47, AWP">
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-1"></i>
+                        Search
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Opportunities Check -->
+<div class="row fade-in">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-dollar-sign me-2"></i>
+                    Quick Arbitrage Check
+                </h5>
+                <button id="check-opportunities-btn" class="btn btn-primary btn-sm">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    Check Opportunities
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="loading" id="opportunities-loading" style="display: none;">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Checking for arbitrage opportunities...</p>
+                </div>
+                <div id="opportunities-table" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Skin</th>
+                                    <th>Buy From</th>
+                                    <th>Sell To</th>
+                                    <th>Buy Price</th>
+                                    <th>Sell Price</th>
+                                    <th>Profit</th>
+                                    <th>Profit %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="opportunities-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="no-opportunities" style="display: none;">
+                    <p class="text-center text-muted">No arbitrage opportunities found. Try checking popular skins or search for specific items.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search Results Modal -->
+<div class="modal fade" id="searchResultsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Search Results</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="search-results">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Global variables
+let statsData = {};
+let opportunitiesData = [];
+let marketplaceStatus = {};
+
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+    setupEventListeners();
+    
+    // Refresh data every 30 seconds
+    setInterval(loadDashboardData, 30000);
+});
+
+function setupEventListeners() {
+    // Quick search form
+    document.getElementById('quick-search-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        performQuickSearch();
+    });
+    
+    // Check opportunities button
+    document.getElementById('check-opportunities-btn').addEventListener('click', function() {
+        checkOpportunities();
+    });
+}
+
+async function loadDashboardData() {
+    try {
+        await Promise.all([
+            loadStats(),
+            loadMarketplaceStatus()
+        ]);
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+    }
+}
+
+async function loadStats() {
+    try {
+        const response = await fetch('/api/stats-data');
+        statsData = await response.json();
+        updateStatsDisplay();
+    } catch (error) {
+        console.error('Error loading stats:', error);
+    }
+}
+
+async function loadMarketplaceStatus() {
+    try {
+        const response = await fetch('/api/marketplace-status');
+        marketplaceStatus = await response.json();
+        updateMarketplaceStatus();
+    } catch (error) {
+        console.error('Error loading marketplace status:', error);
+    }
+}
+
+function updateStatsDisplay() {
+    const totalEl = document.getElementById('total-marketplaces');
+    const availableEl = document.getElementById('available-marketplaces');
+    const lastUpdatedEl = document.getElementById('last-updated');
+    
+    // Add animation class
+    totalEl.classList.add('fade-in');
+    availableEl.classList.add('fade-in');
+    lastUpdatedEl.classList.add('fade-in');
+    
+    totalEl.textContent = statsData.total_marketplaces || 0;
+    availableEl.textContent = statsData.available_marketplaces || 0;
+    
+    const lastUpdated = statsData.last_updated ? new Date(statsData.last_updated).toLocaleTimeString() : 'Never';
+    lastUpdatedEl.textContent = lastUpdated;
+    
+    // Remove animation class after animation completes
+    setTimeout(() => {
+        totalEl.classList.remove('fade-in');
+        availableEl.classList.remove('fade-in');
+        lastUpdatedEl.classList.remove('fade-in');
+    }, 500);
+}
+
+function updateMarketplaceStatus() {
+    const container = document.getElementById('marketplace-status');
+    const loading = container.querySelector('.loading');
+    
+    if (loading) {
+        loading.style.display = 'none';
+    }
+    
+    if (marketplaceStatus.marketplaces) {
+        const statusHtml = marketplaceStatus.marketplaces.map(mp => `
+            <div class="d-flex justify-content-between align-items-center mb-3 slide-in">
+                <div>
+                    <span class="marketplace-status ${mp.available ? 'status-online' : 'status-offline'}"></span>
+                    <strong>${mp.name}</strong>
+                </div>
+                <span class="badge ${mp.available ? 'bg-success' : 'bg-danger'}">
+                    ${mp.available ? 'Online' : 'Offline'}
+                </span>
+            </div>
+        `).join('');
+        
+        container.innerHTML = statusHtml;
+    }
+}
+
+async function checkOpportunities() {
+    const loading = document.getElementById('opportunities-loading');
+    const table = document.getElementById('opportunities-table');
+    const noOpportunities = document.getElementById('no-opportunities');
+    
+    // Show loading
+    loading.style.display = 'block';
+    table.style.display = 'none';
+    noOpportunities.style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/opportunities');
+        const data = await response.json();
+        opportunitiesData = data.opportunities || [];
+        updateOpportunitiesTable();
+    } catch (error) {
+        console.error('Error checking opportunities:', error);
+        loading.style.display = 'none';
+        noOpportunities.style.display = 'block';
+    }
+}
+
+function updateOpportunitiesTable() {
+    const loading = document.getElementById('opportunities-loading');
+    const table = document.getElementById('opportunities-table');
+    const noOpportunities = document.getElementById('no-opportunities');
+    const tbody = document.getElementById('opportunities-tbody');
+    
+    loading.style.display = 'none';
+    
+    if (opportunitiesData.length > 0) {
+        const rows = opportunitiesData.map(opp => `
+            <tr>
+                <td>
+                    <strong>${opp.skin_name || 'Unknown'}</strong>
+                    <br>
+                    <small class="text-muted">${opp.weapon || 'Unknown'}</small>
+                </td>
+                <td>
+                    <span class="badge bg-primary">${opp.buy_marketplace}</span>
+                </td>
+                <td>
+                    <span class="badge bg-success">${opp.sell_marketplace}</span>
+                </td>
+                <td>$${opp.buy_price.toFixed(2)}</td>
+                <td>$${opp.sell_price.toFixed(2)}</td>
+                <td class="profit-positive">$${opp.net_profit.toFixed(2)}</td>
+                <td class="profit-positive">${opp.profit_percentage.toFixed(1)}%</td>
+            </tr>
+        `).join('');
+        
+        tbody.innerHTML = rows;
+        table.style.display = 'block';
+        noOpportunities.style.display = 'none';
+    } else {
+        table.style.display = 'none';
+        noOpportunities.style.display = 'block';
+    }
+}
+
+async function performQuickSearch() {
+    const skinName = document.getElementById('skin-name').value.trim();
+    const weaponName = document.getElementById('weapon-name').value.trim();
+    
+    if (!skinName) {
+        alert('Please enter a skin name');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query: skinName,
+                weapon: weaponName || null
+            })
+        });
+        
+        const data = await response.json();
+        showSearchResults(data);
+    } catch (error) {
+        console.error('Error performing search:', error);
+        alert('Error performing search. Please try again.');
+    }
+}
+
+function showSearchResults(data) {
+    const modal = new bootstrap.Modal(document.getElementById('searchResultsModal'));
+    const resultsContainer = document.getElementById('search-results');
+    
+    if (data.results && data.results.length > 0) {
+        const resultsHtml = data.results.map(result => {
+            const marketplacesHtml = Object.entries(result.marketplaces).map(([mp, data]) => `
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge bg-secondary">${mp}</span>
+                    <span class="fw-bold">$${data.price.toFixed(2)}</span>
+                </div>
+            `).join('');
+            
+            return `
+                <div class="card mb-3" style="background: rgba(15, 52, 96, 0.5);">
+                    <div class="card-body">
+                        <h6 class="card-title">
+                            ${result.condition} ${result.stattrak ? '(StatTrak)' : ''} ${result.souvenir ? '(Souvenir)' : ''}
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Lowest Price: $${result.min_price.toFixed(2)}</strong>
+                            </div>
+                            <div class="col-md-6">
+                                ${marketplacesHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        resultsContainer.innerHTML = resultsHtml;
+    } else {
+        resultsContainer.innerHTML = '<p class="text-center">No results found</p>';
+    }
+    
+    modal.show();
+}
+</script>
+{% endblock %} 

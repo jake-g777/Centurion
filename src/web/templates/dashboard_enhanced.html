@@ -1,0 +1,746 @@
+{% extends "base.html" %}
+
+{% block title %}Enhanced Dashboard - CS2 Arbitrage Tool{% endblock %}
+
+{% block content %}
+<div class="row fade-in">
+    <!-- Statistics Cards -->
+    <div class="col-md-3 mb-4">
+        <div class="card stats-card">
+            <div class="stats-number" id="total-marketplaces">-</div>
+            <div class="stats-label">Total Marketplaces</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card stats-card">
+            <div class="stats-number" id="available-marketplaces">-</div>
+            <div class="stats-label">Available Marketplaces</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card stats-card">
+            <div class="stats-number" id="last-updated">-</div>
+            <div class="stats-label">Last Updated</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card stats-card">
+            <div class="stats-number" id="opportunities-count">-</div>
+            <div class="stats-label">Active Opportunities</div>
+        </div>
+    </div>
+</div>
+
+<!-- Weapon Skin Selection -->
+<div class="row slide-in">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-crosshairs me-2"></i>
+                    Weapon Skin Selection
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="weapon-category" class="form-label">Weapon Category</label>
+                        <select class="form-select" id="weapon-category">
+                            <option value="">Select Category</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="weapon-select" class="form-label">Weapon</label>
+                        <select class="form-select" id="weapon-select" disabled>
+                            <option value="">Select Weapon</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="skin-select" class="form-label">Skin</label>
+                        <select class="form-select" id="skin-select" disabled>
+                            <option value="">Select Skin</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button id="compare-prices-btn" class="btn btn-primary" disabled>
+                            <i class="fas fa-chart-line me-1"></i>
+                            Compare Prices
+                        </button>
+                        <button id="search-skins-btn" class="btn btn-secondary ms-2">
+                            <i class="fas fa-search me-1"></i>
+                            Search Skins
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Price Comparison Results -->
+<div class="row fade-in" id="price-comparison-section" style="display: none;">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-balance-scale me-2"></i>
+                    Price Comparison Results
+                </h5>
+                <div>
+                    <span class="badge bg-success me-2" id="lowest-price-badge"></span>
+                    <span class="badge bg-danger" id="highest-price-badge"></span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="loading" id="price-loading">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Fetching prices from marketplaces...</p>
+                </div>
+                
+                <!-- Price Chart -->
+                <div id="price-chart-container" style="display: none;">
+                    <canvas id="priceChart" width="400" height="200"></canvas>
+                </div>
+                
+                <!-- Price Table -->
+                <div id="price-table-container" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Marketplace</th>
+                                    <th>Price</th>
+                                    <th>Condition</th>
+                                    <th>StatTrak</th>
+                                    <th>Souvenir</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="price-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Arbitrage Opportunities -->
+                <div id="arbitrage-section" style="display: none;">
+                    <h6 class="mt-4 mb-3">
+                        <i class="fas fa-dollar-sign me-2"></i>
+                        Arbitrage Opportunities
+                    </h6>
+                    <div id="arbitrage-opportunities">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Marketplace Status -->
+<div class="row slide-in">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-server me-2"></i>
+                    Marketplace Status
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="marketplace-status">
+                    <div class="loading">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading marketplace status...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Search -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-search me-2"></i>
+                    Quick Search
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="quick-search-form">
+                    <div class="mb-3">
+                        <label for="search-query" class="form-label">Search Query</label>
+                        <input type="text" class="form-control" id="search-query" placeholder="e.g., Dragon Lore, Fade, Asiimov">
+                    </div>
+                    <div class="mb-3">
+                        <label for="search-weapon" class="form-label">Weapon (Optional)</label>
+                        <input type="text" class="form-control" id="search-weapon" placeholder="e.g., AK-47, AWP">
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-1"></i>
+                        Search
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search Results Modal -->
+<div class="modal fade" id="searchResultsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Search Results</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="search-results">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Skin Search Modal -->
+<div class="modal fade" id="skinSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Search Skins</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" class="form-control" id="skin-search-input" placeholder="Search for skins...">
+                </div>
+                <div id="skin-search-results">
+                    <!-- Search results will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Global variables
+let statsData = {};
+let marketplaceStatus = {};
+let priceChart = null;
+let selectedWeapon = '';
+let selectedSkin = '';
+
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+    setupEventListeners();
+    loadWeaponCategories();
+    
+    // Refresh data every 30 seconds
+    setInterval(loadDashboardData, 30000);
+});
+
+function setupEventListeners() {
+    // Weapon category selection
+    document.getElementById('weapon-category').addEventListener('change', function() {
+        loadWeaponsByCategory(this.value);
+    });
+    
+    // Weapon selection
+    document.getElementById('weapon-select').addEventListener('change', function() {
+        selectedWeapon = this.value;
+        loadSkinsForWeapon(this.value);
+    });
+    
+    // Skin selection
+    document.getElementById('skin-select').addEventListener('change', function() {
+        selectedSkin = this.value;
+        document.getElementById('compare-prices-btn').disabled = !this.value;
+    });
+    
+    // Compare prices button
+    document.getElementById('compare-prices-btn').addEventListener('click', function() {
+        comparePrices();
+    });
+    
+    // Search skins button
+    document.getElementById('search-skins-btn').addEventListener('click', function() {
+        showSkinSearchModal();
+    });
+    
+    // Quick search form
+    document.getElementById('quick-search-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        performQuickSearch();
+    });
+    
+    // Skin search input
+    document.getElementById('skin-search-input').addEventListener('input', function() {
+        searchSkins(this.value);
+    });
+}
+
+async function loadDashboardData() {
+    try {
+        await Promise.all([
+            loadStats(),
+            loadMarketplaceStatus()
+        ]);
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+    }
+}
+
+async function loadStats() {
+    try {
+        const response = await fetch('/api/stats-data');
+        statsData = await response.json();
+        updateStatsDisplay();
+    } catch (error) {
+        console.error('Error loading stats:', error);
+    }
+}
+
+async function loadMarketplaceStatus() {
+    try {
+        const response = await fetch('/api/marketplace-status');
+        marketplaceStatus = await response.json();
+        updateMarketplaceStatus();
+    } catch (error) {
+        console.error('Error loading marketplace status:', error);
+    }
+}
+
+function updateStatsDisplay() {
+    const totalEl = document.getElementById('total-marketplaces');
+    const availableEl = document.getElementById('available-marketplaces');
+    const lastUpdatedEl = document.getElementById('last-updated');
+    const opportunitiesEl = document.getElementById('opportunities-count');
+    
+    totalEl.textContent = statsData.total_marketplaces || 0;
+    availableEl.textContent = statsData.available_marketplaces || 0;
+    opportunitiesEl.textContent = statsData.opportunities_count || 0;
+    
+    const lastUpdated = statsData.last_updated ? new Date(statsData.last_updated).toLocaleTimeString() : 'Never';
+    lastUpdatedEl.textContent = lastUpdated;
+}
+
+function updateMarketplaceStatus() {
+    const container = document.getElementById('marketplace-status');
+    const loading = container.querySelector('.loading');
+    
+    if (loading) {
+        loading.style.display = 'none';
+    }
+    
+    if (marketplaceStatus.marketplaces) {
+        const statusHtml = marketplaceStatus.marketplaces.map(mp => `
+            <div class="d-flex justify-content-between align-items-center mb-3 slide-in">
+                <div>
+                    <span class="marketplace-status ${mp.available ? 'status-online' : 'status-offline'}"></span>
+                    <strong>${mp.name}</strong>
+                </div>
+                <span class="badge ${mp.available ? 'bg-success' : 'bg-danger'}">
+                    ${mp.available ? 'Online' : 'Offline'}
+                </span>
+            </div>
+        `).join('');
+        
+        container.innerHTML = statusHtml;
+    }
+}
+
+async function loadWeaponCategories() {
+    try {
+        const response = await fetch('/api/categories');
+        const data = await response.json();
+        
+        const select = document.getElementById('weapon-category');
+        data.categories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category;
+            option.textContent = category;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading weapon categories:', error);
+    }
+}
+
+async function loadWeaponsByCategory(category) {
+    try {
+        const response = await fetch(`/api/categories/${category}/weapons`);
+        const data = await response.json();
+        
+        const select = document.getElementById('weapon-select');
+        select.innerHTML = '<option value="">Select Weapon</option>';
+        
+        data.weapons.forEach(weapon => {
+            const option = document.createElement('option');
+            option.value = weapon;
+            option.textContent = weapon;
+            select.appendChild(option);
+        });
+        
+        select.disabled = false;
+        document.getElementById('skin-select').innerHTML = '<option value="">Select Skin</option>';
+        document.getElementById('skin-select').disabled = true;
+        document.getElementById('compare-prices-btn').disabled = true;
+    } catch (error) {
+        console.error('Error loading weapons:', error);
+    }
+}
+
+async function loadSkinsForWeapon(weapon) {
+    try {
+        const response = await fetch(`/api/weapons/${weapon}/skins`);
+        const data = await response.json();
+        
+        const select = document.getElementById('skin-select');
+        select.innerHTML = '<option value="">Select Skin</option>';
+        
+        data.skins.forEach(skin => {
+            const option = document.createElement('option');
+            option.value = skin;
+            option.textContent = skin;
+            select.appendChild(option);
+        });
+        
+        select.disabled = false;
+    } catch (error) {
+        console.error('Error loading skins:', error);
+    }
+}
+
+async function comparePrices() {
+    if (!selectedWeapon || !selectedSkin) {
+        alert('Please select both weapon and skin');
+        return;
+    }
+    
+    const loading = document.getElementById('price-loading');
+    const chartContainer = document.getElementById('price-chart-container');
+    const tableContainer = document.getElementById('price-table-container');
+    const arbitrageSection = document.getElementById('arbitrage-section');
+    
+    // Show loading
+    loading.style.display = 'block';
+    chartContainer.style.display = 'none';
+    tableContainer.style.display = 'none';
+    arbitrageSection.style.display = 'none';
+    document.getElementById('price-comparison-section').style.display = 'block';
+    
+    try {
+        const response = await fetch('/api/compare-prices', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                weapon: selectedWeapon,
+                skin: selectedSkin
+            })
+        });
+        
+        const data = await response.json();
+        displayPriceComparison(data);
+    } catch (error) {
+        console.error('Error comparing prices:', error);
+        alert('Error comparing prices. Please try again.');
+    }
+}
+
+function displayPriceComparison(data) {
+    const loading = document.getElementById('price-loading');
+    const chartContainer = document.getElementById('price-chart-container');
+    const tableContainer = document.getElementById('price-table-container');
+    const arbitrageSection = document.getElementById('arbitrage-section');
+    
+    loading.style.display = 'none';
+    
+    // Update price badges
+    if (data.lowest_price) {
+        document.getElementById('lowest-price-badge').textContent = `Lowest: $${data.lowest_price.toFixed(2)}`;
+    }
+    if (data.highest_price) {
+        document.getElementById('highest-price-badge').textContent = `Highest: $${data.highest_price.toFixed(2)}`;
+    }
+    
+    // Create price chart
+    createPriceChart(data.prices);
+    chartContainer.style.display = 'block';
+    
+    // Create price table
+    createPriceTable(data.prices);
+    tableContainer.style.display = 'block';
+    
+    // Show arbitrage opportunities
+    if (data.arbitrage_opportunities && data.arbitrage_opportunities.length > 0) {
+        displayArbitrageOpportunities(data.arbitrage_opportunities);
+        arbitrageSection.style.display = 'block';
+    }
+}
+
+function createPriceChart(prices) {
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    
+    // Destroy existing chart
+    if (priceChart) {
+        priceChart.destroy();
+    }
+    
+    const labels = Object.keys(prices);
+    const priceData = labels.map(marketplace => {
+        const marketplacePrices = prices[marketplace];
+        return marketplacePrices.length > 0 ? Math.min(...marketplacePrices.map(p => p.price)) : 0;
+    });
+    
+    priceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Lowest Price ($)',
+                data: priceData,
+                backgroundColor: 'rgba(0, 123, 255, 0.8)',
+                borderColor: 'rgba(0, 123, 255, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toFixed(2);
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+function createPriceTable(prices) {
+    const tbody = document.getElementById('price-table-body');
+    tbody.innerHTML = '';
+    
+    Object.entries(prices).forEach(([marketplace, priceList]) => {
+        priceList.forEach(price => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <span class="badge bg-primary">${marketplace}</span>
+                </td>
+                <td class="fw-bold">$${price.price.toFixed(2)}</td>
+                <td>${price.condition || 'N/A'}</td>
+                <td>${price.stattrak ? 'Yes' : 'No'}</td>
+                <td>${price.souvenir ? 'Yes' : 'No'}</td>
+                <td>
+                    ${price.url ? `<a href="${price.url}" target="_blank" class="btn btn-sm btn-outline-primary">View</a>` : 'N/A'}
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    });
+}
+
+function displayArbitrageOpportunities(opportunities) {
+    const container = document.getElementById('arbitrage-opportunities');
+    
+    const opportunitiesHtml = opportunities.map(opp => `
+        <div class="card mb-3" style="background: rgba(40, 167, 69, 0.1); border: 1px solid rgba(40, 167, 69, 0.3);">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Buy from:</strong><br>
+                        <span class="badge bg-primary">${opp.buy_marketplace}</span><br>
+                        <span class="fw-bold">$${opp.buy_price.toFixed(2)}</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Sell to:</strong><br>
+                        <span class="badge bg-success">${opp.sell_marketplace}</span><br>
+                        <span class="fw-bold">$${opp.sell_price.toFixed(2)}</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Profit:</strong><br>
+                        <span class="text-success fw-bold">$${opp.net_profit.toFixed(2)}</span><br>
+                        <span class="text-success">${opp.profit_percentage.toFixed(1)}%</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Fees:</strong><br>
+                        <span class="text-muted">$${opp.fees.toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = opportunitiesHtml;
+}
+
+function showSkinSearchModal() {
+    const modal = new bootstrap.Modal(document.getElementById('skinSearchModal'));
+    modal.show();
+}
+
+async function searchSkins(query) {
+    if (query.length < 2) {
+        document.getElementById('skin-search-results').innerHTML = '';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/search-skins?query=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        const resultsHtml = data.results.map(result => `
+            <div class="card mb-2" style="cursor: pointer;" onclick="selectSkinFromSearch('${result.weapon}', '${result.skin}')">
+                <div class="card-body py-2">
+                    <strong>${result.weapon}</strong> - ${result.skin}
+                </div>
+            </div>
+        `).join('');
+        
+        document.getElementById('skin-search-results').innerHTML = resultsHtml || '<p class="text-muted">No results found</p>';
+    } catch (error) {
+        console.error('Error searching skins:', error);
+    }
+}
+
+function selectSkinFromSearch(weapon, skin) {
+    // Set the weapon category and weapon
+    const categorySelect = document.getElementById('weapon-category');
+    const weaponSelect = document.getElementById('weapon-select');
+    const skinSelect = document.getElementById('skin-select');
+    
+    // Find the category for this weapon
+    const categories = ['Rifles', 'Pistols', 'SMGs', 'Heavy', 'Knives'];
+    let foundCategory = '';
+    
+    for (const category of categories) {
+        if (getWeaponsByCategory(category).includes(weapon)) {
+            foundCategory = category;
+            break;
+        }
+    }
+    
+    if (foundCategory) {
+        categorySelect.value = foundCategory;
+        loadWeaponsByCategory(foundCategory).then(() => {
+            weaponSelect.value = weapon;
+            loadSkinsForWeapon(weapon).then(() => {
+                skinSelect.value = skin;
+                selectedWeapon = weapon;
+                selectedSkin = skin;
+                document.getElementById('compare-prices-btn').disabled = false;
+                
+                // Close modal
+                bootstrap.Modal.getInstance(document.getElementById('skinSearchModal')).hide();
+                
+                // Auto-compare prices
+                comparePrices();
+            });
+        });
+    }
+}
+
+async function performQuickSearch() {
+    const query = document.getElementById('search-query').value.trim();
+    const weapon = document.getElementById('search-weapon').value.trim();
+    
+    if (!query) {
+        alert('Please enter a search query');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query: query,
+                weapon: weapon || null
+            })
+        });
+        
+        const data = await response.json();
+        showSearchResults(data);
+    } catch (error) {
+        console.error('Error performing search:', error);
+        alert('Error performing search. Please try again.');
+    }
+}
+
+function showSearchResults(data) {
+    const modal = new bootstrap.Modal(document.getElementById('searchResultsModal'));
+    const resultsContainer = document.getElementById('search-results');
+    
+    if (data.results && data.results.length > 0) {
+        const resultsHtml = data.results.map(result => {
+            const marketplacesHtml = Object.entries(result.marketplaces).map(([mp, data]) => `
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge bg-secondary">${mp}</span>
+                    <span class="fw-bold">$${data.price.toFixed(2)}</span>
+                </div>
+            `).join('');
+            
+            return `
+                <div class="card mb-3" style="background: rgba(15, 52, 96, 0.5);">
+                    <div class="card-body">
+                        <h6 class="card-title">
+                            ${result.condition} ${result.stattrak ? '(StatTrak)' : ''} ${result.souvenir ? '(Souvenir)' : ''}
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Lowest Price: $${result.min_price.toFixed(2)}</strong>
+                            </div>
+                            <div class="col-md-6">
+                                ${marketplacesHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        resultsContainer.innerHTML = resultsHtml;
+    } else {
+        resultsContainer.innerHTML = '<p class="text-center">No results found</p>';
+    }
+    
+    modal.show();
+}
+
+// Helper function to get weapons by category (simplified)
+function getWeaponsByCategory(category) {
+    const categoryMap = {
+        'Rifles': ['AK-47', 'AWP', 'M4A4', 'M4A1-S', 'AUG', 'SG 553', 'FAMAS'],
+        'Pistols': ['Desert Eagle', 'USP-S', 'Glock-18', 'P250'],
+        'SMGs': ['MP9', 'MAC-10', 'MP7', 'UMP-45', 'P90'],
+        'Heavy': ['Nova', 'XM1014', 'Sawed-Off', 'MAG-7'],
+        'Knives': ['Karambit', 'M9 Bayonet', 'Butterfly Knife', 'Bayonet']
+    };
+    return categoryMap[category] || [];
+}
+</script>
+{% endblock %} 

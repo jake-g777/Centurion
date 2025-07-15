@@ -1,0 +1,1 @@
+# Data package for CS2 Arbitrage Tool 
