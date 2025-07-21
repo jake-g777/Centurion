@@ -1,114 +1,125 @@
 #!/usr/bin/env python3
 """
-Test script to check marketplace data retrieval
+Test script for marketplace integrations
 """
 
 import asyncio
+import sys
 import os
-from dotenv import load_dotenv
-from src.services.price_monitor_simple import SimplePriceMonitor
 
-# Load environment variables
-load_dotenv()
+# Add the src directory to the Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-async def test_marketplace_data():
-    """Test getting data from both Steam and CSFloat"""
-    
-    print("🔍 Testing Marketplace Data Retrieval")
-    print("=" * 50)
-    
-    # Initialize price monitor
-    price_monitor = SimplePriceMonitor()
-    
-    # Test skins
-    test_cases = [
-        {"weapon": "AK-47", "skin": "Redline"},
-        {"weapon": "AWP", "skin": "Asiimov"},
-        {"weapon": "M4A4", "skin": "Asiimov"},
-        {"weapon": "Desert Eagle", "skin": "Blaze"},
-    ]
-    
-    for test_case in test_cases:
-        weapon = test_case["weapon"]
-        skin = test_case["skin"]
-        
-        print(f"\n🎯 Testing: {weapon} | {skin}")
-        print("-" * 30)
-        
-        try:
-            # Search for the skin
-            prices = await price_monitor.search_skin_manual(skin, weapon)
-            
-            if not prices:
-                print("❌ No prices found")
-                continue
-            
-            # Group by marketplace
-            marketplace_prices = {}
-            for price in prices:
-                if price.marketplace not in marketplace_prices:
-                    marketplace_prices[price.marketplace] = []
-                marketplace_prices[price.marketplace].append(price)
-            
-            # Display results
-            for marketplace, price_list in marketplace_prices.items():
-                print(f"✅ {marketplace}: {len(price_list)} listings found")
-                
-                # Show lowest price
-                lowest_price = min(p.price for p in price_list)
-                print(f"   💰 Lowest: ${lowest_price:.2f}")
-                
-                # Show price range
-                highest_price = max(p.price for p in price_list)
-                if highest_price != lowest_price:
-                    print(f"   📊 Range: ${lowest_price:.2f} - ${highest_price:.2f}")
-                
-                # Show conditions available
-                conditions = set(p.condition for p in price_list if p.condition)
-                if conditions:
-                    print(f"   🎨 Conditions: {', '.join(conditions)}")
-                
-                # Show StatTrak options
-                stattrak_count = sum(1 for p in price_list if p.stattrak)
-                if stattrak_count > 0:
-                    print(f"   ⭐ StatTrak: {stattrak_count} listings")
-            
-            # Check for arbitrage opportunities
-            opportunities = await price_monitor.find_arbitrage_opportunities(skin, weapon)
-            if opportunities:
-                print(f"💰 Arbitrage Opportunities: {len(opportunities)} found")
-                for opp in opportunities:
-                    print(f"   📈 Buy: {opp['buy_marketplace']} @ ${opp['buy_price']:.2f}")
-                    print(f"   📉 Sell: {opp['sell_marketplace']} @ ${opp['sell_price']:.2f}")
-                    print(f"   💵 Profit: ${opp['net_profit']:.2f} ({opp['profit_percentage']:.1f}%)")
-            else:
-                print("❌ No arbitrage opportunities found")
-                
-        except Exception as e:
-            print(f"❌ Error testing {weapon} {skin}: {e}")
-    
-    print("\n" + "=" * 50)
-    print("🏁 Testing complete!")
+from services.price_monitor_simple import SimplePriceMonitor
+from services.marketplaces.steam import SteamMarketplace
+from services.marketplaces.csfloat import CSFloatMarketplace
 
-async def test_marketplace_status():
-    """Test marketplace availability"""
+async def test_ak47_redline_comparison():
+    """Test AK-47 Redline price comparison by wear condition"""
+    print("🎯 Testing AK-47 Redline Price Comparison by Wear Condition")
+    print("=" * 60)
     
-    print("\n🔧 Testing Marketplace Status")
-    print("=" * 30)
+    # Initialize marketplaces
+    steam = SteamMarketplace()
+    csfloat = CSFloatMarketplace()
     
-    price_monitor = SimplePriceMonitor()
+    # Test AK-47 Redline specifically
+    weapon = "AK-47"
+    skin = "Redline"
+    
+    print(f"\n🔍 Searching for: {weapon} | {skin}")
+    print("-" * 40)
+    
+    # Get Steam prices
+    print("\n📈 Steam Marketplace:")
+    steam_prices = await steam.search_skin(skin, weapon)
+    
+    # Group Steam prices by condition and find lowest for each
+    steam_by_condition = {}
+    for price in steam_prices:
+        condition = price.condition or "Unknown"
+        if condition not in steam_by_condition or price.price < steam_by_condition[condition].price:
+            steam_by_condition[condition] = price
+    
+    # Display Steam results
+    for condition in sorted(steam_by_condition.keys()):
+        price = steam_by_condition[condition]
+        stattrak_text = " ⭐" if price.stattrak else ""
+        print(f"   {condition}: ${price.price:.2f}{stattrak_text}")
+    
+    # Get CSFloat prices
+    print("\n📉 CSFloat Marketplace:")
+    csfloat_prices = await csfloat.search_skin(skin, weapon)
+    
+    # Group CSFloat prices by condition and find lowest for each
+    csfloat_by_condition = {}
+    for price in csfloat_prices:
+        condition = price.condition or "Unknown"
+        if condition not in csfloat_by_condition or price.price < csfloat_by_condition[condition].price:
+            csfloat_by_condition[condition] = price
+    
+    # Display CSFloat results
+    for condition in sorted(csfloat_by_condition.keys()):
+        price = csfloat_by_condition[condition]
+        stattrak_text = " ⭐" if price.stattrak else ""
+        print(f"   {condition}: ${price.price:.2f}{stattrak_text}")
+    
+    # Compare prices and find arbitrage opportunities
+    print("\n💰 Arbitrage Analysis:")
+    print("-" * 40)
+    
+    arbitrage_found = False
+    
+    # Check Steam -> CSFloat arbitrage
+    for condition in steam_by_condition:
+        if condition in csfloat_by_condition:
+            steam_price = steam_by_condition[condition]
+            csfloat_price = csfloat_by_condition[condition]
+            
+            # Calculate potential profit (Steam buy, CSFloat sell)
+            profit = csfloat_price.price - steam_price.price
+            profit_percent = (profit / steam_price.price) * 100 if steam_price.price > 0 else 0
+            
+            if profit > 0:
+                arbitrage_found = True
+                print(f"   📈 Buy Steam {condition}: ${steam_price.price:.2f}")
+                print(f"   📉 Sell CSFloat {condition}: ${csfloat_price.price:.2f}")
+                print(f"   💵 Potential Profit: ${profit:.2f} ({profit_percent:.1f}%)")
+                print()
+    
+    # Check CSFloat -> Steam arbitrage
+    for condition in csfloat_by_condition:
+        if condition in steam_by_condition:
+            csfloat_price = csfloat_by_condition[condition]
+            steam_price = steam_by_condition[condition]
+            
+            # Calculate potential profit (CSFloat buy, Steam sell)
+            profit = steam_price.price - csfloat_price.price
+            profit_percent = (profit / csfloat_price.price) * 100 if csfloat_price.price > 0 else 0
+            
+            if profit > 0:
+                arbitrage_found = True
+                print(f"   📈 Buy CSFloat {condition}: ${csfloat_price.price:.2f}")
+                print(f"   📉 Sell Steam {condition}: ${steam_price.price:.2f}")
+                print(f"   💵 Potential Profit: ${profit:.2f} ({profit_percent:.1f}%)")
+                print()
+    
+    if not arbitrage_found:
+        print("   ❌ No arbitrage opportunities found")
+    
+    print("\n" + "=" * 60)
+
+async def main():
+    """Main test function"""
+    print("🚀 Starting AK-47 Redline Price Comparison Test...")
+    print()
     
     try:
-        status = await price_monitor.get_marketplace_status()
-        
-        for mp in status:
-            status_icon = "✅" if mp["available"] else "❌"
-            print(f"{status_icon} {mp['name']}: {'Online' if mp['available'] else 'Offline'}")
-            
+        await test_ak47_redline_comparison()
     except Exception as e:
-        print(f"❌ Error checking marketplace status: {e}")
+        print(f"❌ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    print("🚀 Starting Marketplace Tests...")
-    asyncio.run(test_marketplace_status())
-    asyncio.run(test_marketplace_data()) 
+    asyncio.run(main()) 

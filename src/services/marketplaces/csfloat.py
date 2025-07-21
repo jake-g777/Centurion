@@ -26,82 +26,57 @@ class CSFloatMarketplace(BaseMarketplace):
             "Sec-Fetch-Site": "same-origin",
         }
         if self.api_key:
-            self.headers["Authorization"] = f"Bearer {self.api_key}"
+            self.headers["Authorization"] = self.api_key  # Direct API key format
     
     async def search_skin(self, skin_name: str, weapon: str = None) -> List[SkinPrice]:
         """Search for a skin on CSFloat"""
         try:
-            # Build search query
-            query = skin_name
-            if weapon:
-                query = f"{weapon} {skin_name}"
+            print(f"Searching CSFloat for: {weapon} {skin_name}")
             
-            # Try different CSFloat API endpoints based on common patterns
-            endpoints_to_try = [
-                f"{self.api_url}/listings",
-                f"{self.api_url}/items",
-                f"{self.api_url}/search",
-                f"{self.base_url}/api/v1/listings",
-                f"{self.base_url}/api/v1/items"
-            ]
+            # CSFloat API doesn't support search parameters well, so we get all listings and filter client-side
+            # Try to get more listings by using pagination
+            endpoint = f"{self.api_url}/listings"
+            params = {"limit": 100}  # Try to get more listings
             
-            for endpoint in endpoints_to_try:
-                try:
-                    # Try different parameter combinations
-                    param_combinations = [
-                        {"q": query, "limit": 50, "sort": "price_asc"},
-                        {"query": query, "limit": 50, "sort": "price"},
-                        {"search": query, "limit": 50},
-                        {"name": query, "limit": 50}
-                    ]
+            # Use the headers already set up in __init__
+            headers = self.headers.copy()
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(endpoint, params=params, headers=headers) as response:
+                    print(f"CSFloat API request to {endpoint} - Status: {response.status}")
                     
-                    for params in param_combinations:
-                        try:
-                            # Set up headers with API key if available
-                            headers = self.headers.copy()
-                            if self.api_key:
-                                headers["Authorization"] = self.api_key  # Direct API key, not Bearer
+                    if response.status == 200:
+                        data = await response.json()
+                        print(f"CSFloat API response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                        
+                        # CSFloat returns data in a 'data' field
+                        listings = data.get("data", [])
+                        if listings:
+                            print(f"Found {len(listings)} total CSFloat listings")
+                            # Debug: show first listing structure
+                            if len(listings) > 0:
+                                print(f"First listing keys: {list(listings[0].keys()) if isinstance(listings[0], dict) else 'Not a dict'}")
                             
-                            async with aiohttp.ClientSession() as session:
-                                async with session.get(endpoint, params=params, headers=headers) as response:
-                                    print(f"Trying CSFloat endpoint: {endpoint} with params: {params} - Status: {response.status}")
-                                    
-                                    if response.status == 200:
-                                        data = await response.json()
-                                        print(f"CSFloat API response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
-                                        
-                                        # CSFloat returns data in a 'data' field
-                                        listings = data.get("data", [])
-                                        if listings:
-                                            print(f"Found {len(listings)} CSFloat listings")
-                                            # Debug: show first listing structure
-                                            if len(listings) > 0:
-                                                print(f"First listing keys: {list(listings[0].keys()) if isinstance(listings[0], dict) else 'Not a dict'}")
-                                            return self._parse_listings(listings)
-                                        else:
-                                            print("No listings found in CSFloat response")
-                                            continue
-                                    elif response.status == 401:
-                                        print(f"CSFloat API unauthorized (401) - API key may be invalid")
-                                        continue
-                                    elif response.status == 403:
-                                        print(f"CSFloat API forbidden (403) - trying different approach")
-                                        continue
-                                    else:
-                                        print(f"CSFloat endpoint {endpoint} failed: {response.status}")
-                                        continue
-                                        
-                        except Exception as e:
-                            print(f"Error with CSFloat endpoint {endpoint}: {e}")
-                            continue
+                            # Debug: Show some sample items to see what's available
+                            print("\nSample items from CSFloat:")
+                            for i, listing in enumerate(listings[:5]):
+                                item = listing.get("item", {})
+                                market_hash_name = item.get("market_hash_name", "Unknown")
+                                print(f"  {i+1}. {market_hash_name}")
                             
-                except Exception as e:
-                    print(f"Error trying CSFloat endpoint {endpoint}: {e}")
-                    continue
-            
-            # If all API attempts fail, try web scraping as fallback
-            print("All CSFloat API attempts failed, trying web scraping...")
-            return await self._search_skin_alternative(skin_name, weapon)
+                            return self._parse_listings(listings, weapon, skin_name)
+                        else:
+                            print("No listings found in CSFloat response")
+                            return []
+                    elif response.status == 401:
+                        print(f"CSFloat API unauthorized (401) - API key may be invalid")
+                        return []
+                    elif response.status == 403:
+                        print(f"CSFloat API forbidden (403) - API key required or invalid")
+                        return []
+                    else:
+                        print(f"CSFloat API failed: {response.status}")
+                        return []
                         
         except Exception as e:
             print(f"Error searching CSFloat: {e}")
@@ -230,19 +205,19 @@ class CSFloatMarketplace(BaseMarketplace):
             print(f"Error getting popular skins from CSFloat: {e}")
             return []
     
-    def _parse_listings(self, listings: list) -> list:
+    def _parse_listings(self, listings: list, target_weapon: str = None, target_skin: str = None) -> list:
         """Parse CSFloat listings into SkinPrice objects"""
         prices = []
         print(f"Parsing {len(listings)} CSFloat listings")
         
-        for i, listing in enumerate(listings[:3]):  # Only show first 3 for debugging
+        for i, listing in enumerate(listings):
             try:
                 if not isinstance(listing, dict):
                     continue  # skip non-dict entries
                 
                 # Debug: Print the first few listings to see structure
-                if i == 0:
-                    print(f"First CSFloat listing keys: {list(listing.keys())}")
+                if i < 3:
+                    print(f"CSFloat listing {i} keys: {list(listing.keys())}")
                     print(f"Price field: {listing.get('price')}")
                     print(f"Item field: {listing.get('item')}")
                 
@@ -266,14 +241,42 @@ class CSFloatMarketplace(BaseMarketplace):
                 is_stattrak = item.get("is_stattrak", False)
                 is_souvenir = item.get("is_souvenir", False)
                 
-                # Debug: Print item details
-                if i == 0:
+                # Debug: Print item details for first few items
+                if i < 3:
                     print(f"Market hash name: {market_hash_name}")
                     print(f"Item name: {item_name}")
                     print(f"Wear name: {wear_name}")
                     print(f"Is StatTrak: {is_stattrak}")
                     print(f"Is Souvenir: {is_souvenir}")
                     print(f"Price USD: {price_usd}")
+                
+                # Filter by weapon and skin if specified
+                if target_weapon and target_skin:
+                    # Check if the item matches our target weapon and skin
+                    item_matches = False
+                    
+                    # Check market_hash_name (most reliable)
+                    if market_hash_name:
+                        # Look for weapon name and skin name in market_hash_name
+                        weapon_lower = target_weapon.lower()
+                        skin_lower = target_skin.lower()
+                        market_hash_lower = market_hash_name.lower()
+                        
+                        if weapon_lower in market_hash_lower and skin_lower in market_hash_lower:
+                            item_matches = True
+                    
+                    # Also check item_name as fallback
+                    if not item_matches and item_name:
+                        weapon_lower = target_weapon.lower()
+                        skin_lower = target_skin.lower()
+                        item_name_lower = item_name.lower()
+                        
+                        if weapon_lower in item_name_lower and skin_lower in item_name_lower:
+                            item_matches = True
+                    
+                    # Skip items that don't match our target
+                    if not item_matches:
+                        continue
                 
                 # Build URL
                 listing_id = listing.get("id", "")
@@ -287,15 +290,15 @@ class CSFloatMarketplace(BaseMarketplace):
                     listing_count=1,
                     timestamp=datetime.utcnow(),
                     url=url,
-                    condition=exterior,
-                    stattrak=stattrak,
-                    souvenir=souvenir
+                    condition=wear_name,
+                    stattrak=is_stattrak,
+                    souvenir=is_souvenir
                 ))
             except Exception as e:
                 print(f"Error parsing CSFloat listing {i}: {e}")
                 continue
         
-        print(f"Successfully parsed {len(prices)} CSFloat prices")
+        print(f"Successfully parsed {len(prices)} CSFloat prices (filtered for {target_weapon} {target_skin})")
         return prices
     
     def _parse_listing(self, listing: Dict) -> Optional[SkinPrice]:
